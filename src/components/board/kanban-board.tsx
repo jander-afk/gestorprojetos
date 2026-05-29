@@ -29,7 +29,7 @@ import { cn } from "@/lib/cn";
 type Grouped = Record<TaskStatus, TaskDTO[]>;
 
 function group(tasks: TaskDTO[]): Grouped {
-  const g = Object.fromEntries(COLUMN_ORDER.map((s) => [s, []])) as Grouped;
+  const g = Object.fromEntries(COLUMN_ORDER.map((s) => [s, []])) as unknown as Grouped;
   for (const t of tasks) g[t.status].push(t);
   for (const s of COLUMN_ORDER) g[s].sort((a, b) => a.position - b.position);
   return g;
