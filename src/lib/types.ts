@@ -3,6 +3,8 @@ import type { TaskStatus, Priority } from "@prisma/client";
 // DTOs que o frontend consome da API (datas chegam como string ISO).
 export type LabelDTO = { id: string; name: string; color: string };
 
+export type CommentDTO = { id: string; body: string; createdAt: string };
+
 export type ChecklistItemDTO = {
   id: string;
   text: string;
@@ -23,6 +25,8 @@ export type TaskDTO = {
   projectId: string;
   labels: { label: LabelDTO }[];
   checklist: ChecklistItemDTO[];
+  links: string[];
+  comments?: CommentDTO[];
   _count?: { comments: number };
 };
 

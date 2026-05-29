@@ -159,6 +159,7 @@ model Task {
   startDate   DateTime? // quando a tarefa deve começar
   dueDate     DateTime? // prazo — base do lembrete T-2h e dos calendários
   completedAt DateTime? // preenchido ao entrar em CONCLUIDO
+  links       String[] @default([]) // links relacionados (URLs)
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

@@ -21,6 +21,7 @@ export const createTaskSchema = z.object({
   startDate: dateField.optional(),
   dueDate: dateField.optional(),
   labelIds: z.array(z.string().cuid()).optional(),
+  links: z.array(z.string().trim().min(1).max(500)).optional(),
 });
 
 export const updateTaskSchema = createTaskSchema
@@ -83,4 +84,8 @@ export const checklistItemCreateSchema = z.object({
 export const checklistItemUpdateSchema = z.object({
   text: z.string().trim().min(1).max(300).optional(),
   done: z.boolean().optional(),
+});
+
+export const commentCreateSchema = z.object({
+  body: z.string().trim().min(1).max(2000),
 });

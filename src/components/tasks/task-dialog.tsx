@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trash2, Plus, Sparkles } from "lucide-react";
+import { Trash2, Plus, Sparkles, Link2, Send } from "lucide-react";
 import { Priority } from "@prisma/client";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import {
   useSuggestChecklist,
   useLabels,
   useCreateLabel,
+  useAddComment,
+  useDeleteComment,
 } from "@/hooks/use-task-detail";
 import { cn } from "@/lib/cn";
 
@@ -40,6 +42,9 @@ function isoToLocal(iso: string | null): string {
 function localToIso(v: string): string | null {
   return v ? new Date(v).toISOString() : null;
 }
+function withScheme(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
 
 export function TaskDialog({
   taskId,
@@ -56,6 +61,8 @@ export function TaskDialog({
   const toggleItem = useUpdateChecklistItem(id);
   const delItem = useDeleteChecklistItem(id);
   const suggest = useSuggestChecklist(id);
+  const addComment = useAddComment(id);
+  const delComment = useDeleteComment(id);
   const { data: labels } = useLabels(task?.projectId);
   const createLabel = useCreateLabel(task?.projectId ?? "");
 
@@ -65,8 +72,11 @@ export function TaskDialog({
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [labelIds, setLabelIds] = useState<string[]>([]);
+  const [links, setLinks] = useState<string[]>([]);
   const [newItem, setNewItem] = useState("");
   const [newLabel, setNewLabel] = useState("");
+  const [newLink, setNewLink] = useState("");
+  const [newComment, setNewComment] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
@@ -77,6 +87,7 @@ export function TaskDialog({
       setStartDate(isoToLocal(task.startDate));
       setDueDate(isoToLocal(task.dueDate));
       setLabelIds(task.labels.map((l) => l.label.id));
+      setLinks(task.links ?? []);
       setSuggestions([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,13 +98,17 @@ export function TaskDialog({
       prev.includes(lid) ? prev.filter((x) => x !== lid) : [...prev, lid],
     );
   }
-
   async function addNewLabel() {
     const name = newLabel.trim();
     if (!name || !task) return;
     const created = await createLabel.mutateAsync({ name });
     setLabelIds((prev) => [...prev, created.id]);
     setNewLabel("");
+  }
+  function addLink() {
+    const l = newLink.trim();
+    if (l) setLinks((prev) => [...prev, l]);
+    setNewLink("");
   }
 
   async function save() {
@@ -106,6 +121,7 @@ export function TaskDialog({
       startDate: localToIso(startDate),
       dueDate: localToIso(dueDate),
       labelIds,
+      links,
     });
     onClose();
   }
@@ -121,6 +137,12 @@ export function TaskDialog({
     const r = await suggest.mutateAsync();
     const existing = new Set((task?.checklist ?? []).map((c) => c.text));
     setSuggestions(r.suggestions.filter((s) => !existing.has(s)));
+  }
+
+  function sendComment() {
+    const b = newComment.trim();
+    if (b) addComment.mutate(b);
+    setNewComment("");
   }
 
   const done = task?.checklist.filter((c) => c.done).length ?? 0;
@@ -142,7 +164,7 @@ export function TaskDialog({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Categorias</label>
+            <label className="mb-1 block text-sm font-medium">Categorias / tags</label>
             <div className="flex flex-wrap gap-2">
               {labels?.map((l) => {
                 const on = labelIds.includes(l.id);
@@ -225,6 +247,46 @@ export function TaskDialog({
             </div>
           </div>
 
+          {/* Links relacionados */}
+          <div>
+            <label className="mb-1 block text-sm font-medium">Links relacionados</label>
+            <div className="space-y-1.5">
+              {links.map((l, i) => (
+                <div key={`${l}-${i}`} className="flex items-center gap-2">
+                  <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <a
+                    href={withScheme(l)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 truncate text-sm text-secondary hover:underline"
+                  >
+                    {l}
+                  </a>
+                  <button
+                    onClick={() => setLinks((p) => p.filter((_, j) => j !== i))}
+                    className="text-muted-foreground hover:text-accent"
+                    aria-label="Remover link"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={newLink}
+                onChange={(e) => setNewLink(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addLink()}
+                placeholder="Cole um link (Drive, Figma, briefing…)"
+                className="h-9 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+              <Button size="sm" variant="outline" onClick={addLink}>
+                Adicionar
+              </Button>
+            </div>
+          </div>
+
+          {/* Checklist */}
           <div>
             <div className="mb-2 flex items-center justify-between">
               <label className="text-sm font-medium">
@@ -317,6 +379,48 @@ export function TaskDialog({
                 }}
               >
                 Adicionar
+              </Button>
+            </div>
+          </div>
+
+          {/* Comentários / observações */}
+          <div>
+            <label className="mb-2 block text-sm font-medium">
+              Observações e comentários
+            </label>
+            <div className="space-y-2">
+              {task.comments?.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-start gap-2 rounded-lg bg-muted/50 p-2"
+                >
+                  <p className="flex-1 whitespace-pre-wrap text-sm">{c.body}</p>
+                  <button
+                    onClick={() => delComment.mutate(c.id)}
+                    className="text-muted-foreground hover:text-accent"
+                    aria-label="Remover comentário"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendComment();
+                  }
+                }}
+                rows={1}
+                placeholder="Escreva uma observação…"
+                className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+              <Button size="icon" variant="outline" onClick={sendComment}>
+                <Send className="h-4 w-4" />
               </Button>
             </div>
           </div>

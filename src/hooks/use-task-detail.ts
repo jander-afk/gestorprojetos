@@ -98,3 +98,21 @@ export function useCreateLabel(projectId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["labels", projectId] }),
   });
 }
+
+// ---- Comentários / observações ----
+export function useAddComment(taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) =>
+      apiSend(`/api/tasks/${taskId}/comments`, "POST", { body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task", taskId] }),
+  });
+}
+
+export function useDeleteComment(taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend<void>(`/api/comments/${id}`, "DELETE"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task", taskId] }),
+  });
+}

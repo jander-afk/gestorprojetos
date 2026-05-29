@@ -100,6 +100,7 @@ export async function createTask(input: CreateTaskInput) {
       priority: input.priority,
       startDate: input.startDate ?? undefined,
       dueDate: input.dueDate ?? undefined,
+      links: input.links ?? undefined,
       position,
       labels: input.labelIds?.length
         ? { create: input.labelIds.map((labelId) => ({ labelId })) }
@@ -132,6 +133,7 @@ export async function updateTask(id: string, input: UpdateTaskInput) {
       status: input.status,
       startDate: input.startDate ?? undefined,
       dueDate: input.dueDate ?? undefined,
+      links: input.links ?? undefined,
       completedAt: statusChanged
         ? completedAtFor(input.status!, before.completedAt)
         : undefined,
