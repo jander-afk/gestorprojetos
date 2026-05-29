@@ -208,4 +208,25 @@ export async function moveTask(id: string, input: MoveTaskInput) {
       position,
       completedAt: statusChanged
         ? completedAtFor(input.status, before.completedAt)
-      
+              : null,
+    },
+    include: taskInclude,
+  });
+
+  if (statusChanged) {
+    await onStatusChanged(id, before.status, input.status, "MOVED");
+
+    // entrou em CONCLUIDO -> não faz mais sentido lembrar do prazo
+    if (input.status === TaskStatus.CONCLUIDO) {
+      await cancelDeadlineReminder(id);
+    }
+  }
+
+  return updated;
+}
+
+export async function deleteTask(id: string) {
+  await getTaskOrThrow(id);
+  await cancelDeadlineReminder(id);
+  await prisma.task.delete({ where: { id } });
+}

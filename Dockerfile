@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Dependências (inclui devDeps: tsx e prisma são necessários em runtime/build)
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Código + build
 COPY . .
