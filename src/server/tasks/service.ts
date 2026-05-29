@@ -16,6 +16,7 @@ import {
 // include padrão usado nas respostas (labels e contagem de comentários).
 const taskInclude = {
   labels: { include: { label: true } },
+  checklist: { orderBy: { position: "asc" } },
   _count: { select: { comments: true } },
 } satisfies Prisma.TaskInclude;
 

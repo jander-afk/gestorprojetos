@@ -21,6 +21,7 @@ import { COLUMN_ORDER, COLUMN_LABEL } from "@/lib/kanban";
 import { COLUMN_DOT } from "./column-style";
 import { KanbanColumn } from "./kanban-column";
 import { TaskCard } from "./task-card";
+import { TaskDialog } from "@/components/tasks/task-dialog";
 import { useIsDesktop } from "@/hooks/use-media-query";
 import { useMoveTask, useCreateTask } from "@/hooks/use-tasks";
 import type { TaskDTO } from "@/lib/types";
@@ -51,14 +52,13 @@ export function KanbanBoard({
   const [mobileStatus, setMobileStatus] = useState<TaskStatus>(
     TaskStatus.FOCO_HOJE,
   );
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
-  // Ressincroniza com o servidor quando não estiver arrastando.
   useEffect(() => {
     if (!activeId) setItems(group(tasks));
   }, [tasks, activeId]);
 
   const sensors = useSensors(
-    // distância evita conflito com clique no select/alça
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 150, tolerance: 6 },
@@ -80,9 +80,7 @@ export function KanbanBoard({
   function containerOf(state: Grouped, id: UniqueIdentifier): TaskStatus | null {
     if ((COLUMN_ORDER as string[]).includes(id as string))
       return id as TaskStatus;
-    return (
-      COLUMN_ORDER.find((s) => state[s].some((t) => t.id === id)) ?? null
-    );
+    return COLUMN_ORDER.find((s) => state[s].some((t) => t.id === id)) ?? null;
   }
 
   function persist(taskId: string, status: TaskStatus, arr: TaskDTO[]) {
@@ -99,7 +97,6 @@ export function KanbanBoard({
     setActiveId(e.active.id);
   }
 
-  // Move o cartão entre colunas durante o arraste (cross-container).
   function onDragOver(e: DragOverEvent) {
     const { active, over } = e;
     if (!over) return;
@@ -111,21 +108,20 @@ export function KanbanBoard({
       const moving = prev[from].find((t) => t.id === active.id);
       if (!moving) return prev;
 
-      const overIsColumn = (COLUMN_ORDER as string[]).includes(
-        over.id as string,
-      );
+      const overIsColumn = (COLUMN_ORDER as string[]).includes(over.id as string);
       const toArr = prev[to];
       const overIndex = overIsColumn
         ? toArr.length
         : toArr.findIndex((t) => t.id === over.id);
+      const idx = overIndex < 0 ? toArr.length : overIndex;
 
       return {
         ...prev,
         [from]: prev[from].filter((t) => t.id !== active.id),
         [to]: [
-          ...toArr.slice(0, overIndex < 0 ? toArr.length : overIndex),
+          ...toArr.slice(0, idx),
           { ...moving, status: to },
-          ...toArr.slice(overIndex < 0 ? toArr.length : overIndex),
+          ...toArr.slice(idx),
         ],
       };
     });
@@ -154,7 +150,6 @@ export function KanbanBoard({
     setActiveId(null);
   }
 
-  // Mover via select (mobile / sem arrastar): manda para o fim da coluna.
   function changeStatus(taskId: string, status: TaskStatus) {
     setItems((prev) => {
       const from = containerOf(prev, taskId);
@@ -169,73 +164,78 @@ export function KanbanBoard({
     move.mutate({ taskId, status, beforeId: null, afterId: null });
   }
 
-  function createTask(title: string, status: TaskStatus) {
-    create.mutate({ title, status });
+  async function createTask(title: string, status: TaskStatus) {
+    const t = await create.mutateAsync({ title, status });
+    setEditingTaskId(t.id); // abre o modal para enriquecer a tarefa recém-criada
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
-    >
-      {isDesktop ? (
-        // Desktop: 7 colunas em linha com scroll horizontal suave
-        <div className="no-scrollbar flex h-[calc(100dvh-7rem)] gap-4 overflow-x-auto pb-2">
-          {COLUMN_ORDER.map((status) => (
-            <div key={status} className="w-72 shrink-0">
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
+      >
+        {isDesktop ? (
+          <div className="flex h-[calc(100dvh-7rem)] gap-4 overflow-x-auto pb-3">
+            {COLUMN_ORDER.map((status) => (
+              <div key={status} className="flex w-72 shrink-0 flex-col">
+                <KanbanColumn
+                  status={status}
+                  tasks={items[status]}
+                  onChangeStatus={changeStatus}
+                  onCreate={createTask}
+                  onOpen={setEditingTaskId}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-[calc(100dvh-9.5rem)] flex-col">
+            <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4">
+              {COLUMN_ORDER.map((status) => {
+                const active = status === mobileStatus;
+                return (
+                  <button
+                    key={status}
+                    onClick={() => setMobileStatus(status)}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                      active
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground",
+                    )}
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: COLUMN_DOT[status] }}
+                    />
+                    {COLUMN_LABEL[status]}
+                    <span className="opacity-60">{items[status].length}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="min-h-0 flex-1">
               <KanbanColumn
-                status={status}
-                tasks={items[status]}
+                status={mobileStatus}
+                tasks={items[mobileStatus]}
                 onChangeStatus={changeStatus}
                 onCreate={createTask}
+                onOpen={setEditingTaskId}
               />
             </div>
-          ))}
-        </div>
-      ) : (
-        // Mobile: seletor de etapa + uma coluna por vez
-        <div className="flex h-[calc(100dvh-9.5rem)] flex-col">
-          <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4">
-            {COLUMN_ORDER.map((status) => {
-              const active = status === mobileStatus;
-              return (
-                <button
-                  key={status}
-                  onClick={() => setMobileStatus(status)}
-                  className={cn(
-                    "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                    active
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground",
-                  )}
-                >
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: COLUMN_DOT[status] }}
-                  />
-                  {COLUMN_LABEL[status]}
-                  <span className="opacity-60">{items[status].length}</span>
-                </button>
-              );
-            })}
           </div>
-          <div className="min-h-0 flex-1">
-            <KanbanColumn
-              status={mobileStatus}
-              tasks={items[mobileStatus]}
-              onChangeStatus={changeStatus}
-              onCreate={createTask}
-            />
-          </div>
-        </div>
-      )}
+        )}
 
-      <DragOverlay>
-        {activeTask ? <TaskCard task={activeTask} overlay /> : null}
-      </DragOverlay>
-    </DndContext>
+        <DragOverlay>
+          {activeTask ? <TaskCard task={activeTask} overlay /> : null}
+        </DragOverlay>
+      </DndContext>
+
+      <TaskDialog taskId={editingTaskId} onClose={() => setEditingTaskId(null)} />
+    </>
   );
 }

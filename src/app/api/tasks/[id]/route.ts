@@ -15,6 +15,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       where: { id: params.id },
       include: {
         labels: { include: { label: true } },
+        checklist: { orderBy: { position: "asc" } },
         comments: { orderBy: { createdAt: "asc" } },
         activities: { orderBy: { createdAt: "desc" }, take: 20 },
       },

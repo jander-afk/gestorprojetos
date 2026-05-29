@@ -18,11 +18,13 @@ export function KanbanColumn({
   tasks,
   onChangeStatus,
   onCreate,
+  onOpen,
 }: {
   status: TaskStatus;
   tasks: TaskDTO[];
   onChangeStatus: (taskId: string, status: TaskStatus) => void;
   onCreate: (title: string, status: TaskStatus) => void;
+  onOpen: (taskId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -41,7 +43,7 @@ export function KanbanColumn({
 
       <div
         ref={setNodeRef}
-        className={`flex-1 space-y-2 rounded-xl p-2 transition-colors ${
+        className={`flex-1 space-y-2 overflow-y-auto rounded-xl p-2 transition-colors ${
           isOver ? "bg-primary/5" : "bg-muted/40"
         }`}
       >
@@ -54,6 +56,7 @@ export function KanbanColumn({
               key={task.id}
               task={task}
               onChangeStatus={onChangeStatus}
+              onOpen={onOpen}
             />
           ))}
         </SortableContext>

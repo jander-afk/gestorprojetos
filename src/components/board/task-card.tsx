@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Clock, MessageSquare } from "lucide-react";
+import { GripVertical, Clock, MessageSquare, ListChecks } from "lucide-react";
 import { TaskStatus, Priority } from "@prisma/client";
 import { COLUMN_ORDER, COLUMN_LABEL } from "@/lib/kanban";
 import type { TaskDTO } from "@/lib/types";
@@ -28,19 +28,20 @@ function formatDue(iso: string): string {
 export function TaskCard({
   task,
   onChangeStatus,
+  onOpen,
   overlay = false,
 }: {
   task: TaskDTO;
   onChangeStatus?: (taskId: string, status: TaskStatus) => void;
+  onOpen?: (taskId: string) => void;
   overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-  };
+  const style = { transform: CSS.Translate.toString(transform), transition };
+  const doneCount = task.checklist?.filter((c) => c.done).length ?? 0;
+  const totalCount = task.checklist?.length ?? 0;
 
   return (
     <div
@@ -53,7 +54,6 @@ export function TaskCard({
       )}
     >
       <div className="flex items-start gap-2">
-        {/* Alça de arraste — só ela inicia o drag, p/ o select funcionar */}
         <button
           {...attributes}
           {...listeners}
@@ -63,7 +63,10 @@ export function TaskCard({
           <GripVertical className="h-4 w-4" />
         </button>
 
-        <div className="min-w-0 flex-1">
+        <div
+          className={cn("min-w-0 flex-1", onOpen && !overlay && "cursor-pointer")}
+          onClick={() => !overlay && onOpen?.(task.id)}
+        >
           <p className="text-sm font-medium leading-snug">{task.title}</p>
 
           {task.labels.length > 0 && (
@@ -80,7 +83,7 @@ export function TaskCard({
             </div>
           )}
 
-          <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span
               className="inline-block h-2 w-2 rounded-full"
               style={{ backgroundColor: PRIORITY_COLOR[task.priority] }}
@@ -92,6 +95,12 @@ export function TaskCard({
                 {formatDue(task.dueDate)}
               </span>
             )}
+            {totalCount > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <ListChecks className="h-3.5 w-3.5" />
+                {doneCount}/{totalCount}
+              </span>
+            )}
             {task._count && task._count.comments > 0 && (
               <span className="inline-flex items-center gap-1">
                 <MessageSquare className="h-3.5 w-3.5" />
@@ -99,25 +108,22 @@ export function TaskCard({
               </span>
             )}
           </div>
-
-          {/* Mover de coluna sem arrastar — essencial no mobile */}
-          {onChangeStatus && !overlay && (
-            <select
-              value={task.status}
-              onChange={(e) =>
-                onChangeStatus(task.id, e.target.value as TaskStatus)
-              }
-              className="mt-2 w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
-            >
-              {COLUMN_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  Mover para: {COLUMN_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          )}
         </div>
       </div>
+
+      {onChangeStatus && !overlay && (
+        <select
+          value={task.status}
+          onChange={(e) => onChangeStatus(task.id, e.target.value as TaskStatus)}
+          className="mt-2 w-full rounded-md border border-input bg-background px-2 py-1 text-xs text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
+        >
+          {COLUMN_ORDER.map((s) => (
+            <option key={s} value={s}>
+              Mover para: {COLUMN_LABEL[s]}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }

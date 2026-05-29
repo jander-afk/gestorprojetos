@@ -75,3 +75,12 @@ export type MoveTaskInput = z.infer<typeof moveTaskSchema>;
 export type NotificationSettingsInput = z.infer<
   typeof notificationSettingsSchema
 >;
+
+export const checklistItemCreateSchema = z.object({
+  text: z.string().trim().min(1).max(300),
+});
+
+export const checklistItemUpdateSchema = z.object({
+  text: z.string().trim().min(1).max(300).optional(),
+  done: z.boolean().optional(),
+});
