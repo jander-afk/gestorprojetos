@@ -1,0 +1,14 @@
+{
+  "name": "lembrete_prazo",
+  "language": "pt_BR",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "BODY",
+      "text": "⏰ Lembrete: a tarefa \"{{1}}\" vence {{2}}. Está no radar?",
+      "example": {
+        "body_text": [["Enviar briefing à gráfica", "22/08 às 14:00"]]
+      }
+    }
+  ]
+}

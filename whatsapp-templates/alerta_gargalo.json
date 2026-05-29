@@ -1,0 +1,14 @@
+{
+  "name": "alerta_gargalo",
+  "language": "pt_BR",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "BODY",
+      "text": "🚧 Gargalo no quadro: a tarefa \"{{1}}\" entrou em Pendente. Vale checar o que travou.",
+      "example": {
+        "body_text": [["Aprovar arte do tapume"]]
+      }
+    }
+  ]
+}

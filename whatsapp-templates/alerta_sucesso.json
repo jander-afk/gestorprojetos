@@ -1,0 +1,14 @@
+{
+  "name": "alerta_sucesso",
+  "language": "pt_BR",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "BODY",
+      "text": "✅ Avançou! A tarefa \"{{1}}\" foi para {{2}}. Bom trabalho.",
+      "example": {
+        "body_text": [["Aprovar arte do tapume", "Aprovado"]]
+      }
+    }
+  ]
+}

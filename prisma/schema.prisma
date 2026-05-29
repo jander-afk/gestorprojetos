@@ -1,0 +1,281 @@
+// ============================================================
+// Kanban SHU — Schema do Banco (Passo 1)
+// PostgreSQL + Prisma
+// Modo: SINGLE-USER (um gestor) — WhatsApp via Meta Cloud API oficial
+// ============================================================
+//
+// Nota de escopo: o app é single-user (só o gestor). Por isso NÃO há
+// atribuição de tarefas (assignee), membros de projeto, nem papéis (role).
+// Mantemos a tabela User só para autenticação, fuso e dados do WhatsApp.
+// Reintroduzir multiusuário depois é barato: voltam ProjectMember,
+// Task.assignee e o relacionamento de criador.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------------
+
+/// As 7 colunas do Kanban, em ordem fixa.
+/// A ordem visual no board segue esta sequência.
+enum TaskStatus {
+  FOCO_HOJE // 1. Atividades a se fazer no dia a dia
+  BACKLOG // 2. A fazer (backlog geral)
+  EM_ANDAMENTO // 3. Em andamento
+  PENDENTE // 4. Pendente  -> dispara alerta de gargalo
+  APROVADO // 5. Aprovado  -> dispara alerta de sucesso
+  EM_PRODUCAO // 6. Em produção
+  CONCLUIDO // 7. Concluído -> dispara alerta de sucesso
+}
+
+enum Priority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+/// Tipos de gatilho de notificação WhatsApp.
+/// Todos são iniciados pelo sistema => exigem Message Template
+/// aprovado na Meta Cloud API (mensagem fora da janela de 24h).
+enum NotificationType {
+  RESUMO_MATINAL // 08:00, tarefas em FOCO_HOJE
+  ALERTA_GARGALO // tarefa movida para PENDENTE
+  ALERTA_SUCESSO // tarefa movida para APROVADO ou CONCLUIDO
+  LEMBRETE_PRAZO // 2h antes da dueDate
+}
+
+enum NotificationChannel {
+  WHATSAPP
+}
+
+/// Estado de cada disparo (auditoria + dedupe).
+enum NotificationStatus {
+  AGENDADA // job enfileirado, ainda não enviado
+  ENVIADA
+  FALHOU
+  CANCELADA // ex.: prazo reagendado ou tarefa concluída antes
+}
+
+// ------------------------------------------------------------
+// USUÁRIO (único — o gestor)
+// ------------------------------------------------------------
+
+model User {
+  id           String @id @default(cuid())
+  email        String @unique
+  name         String
+  passwordHash String // bcrypt — nunca a senha em texto
+
+  /// Número em formato E.164 (ex.: 5582999999999) para a Cloud API.
+  whatsappNumber String?
+
+  /// Fuso do usuário. Crítico para o resumo das 08:00 e o lembrete T-2h.
+  timezone String @default("America/Maceio")
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notificationSetting NotificationSetting?
+  notificationLogs    NotificationLog[]
+
+  @@index([email])
+}
+
+/// Preferências de notificação (nada hardcoded no código).
+model NotificationSetting {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Liga/desliga todas as notificações.
+  enabled Boolean @default(true)
+
+  /// Número destino; se nulo, usa User.whatsappNumber.
+  whatsappNumberOverride String?
+
+  // Gatilhos individuais
+  resumoMatinalEnabled Boolean @default(true)
+  /// Horário do resumo no formato "HH:mm" (interpretado no timezone do usuário).
+  resumoMatinalTime    String  @default("08:00")
+
+  alertaGargaloEnabled Boolean @default(true)
+  alertaSucessoEnabled Boolean @default(true)
+
+  lembretePrazoEnabled Boolean @default(true)
+  /// Antecedência do lembrete, em minutos (default 120 = 2h).
+  lembretePrazoMinutos Int     @default(120)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------
+// PROJETOS / QUADROS
+// ------------------------------------------------------------
+
+/// Um quadro Kanban. Permite separar, ex.: "Lançamento SHU Jatiúca"
+/// de outras frentes. As 7 colunas são as mesmas em todo projeto.
+model Project {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  color       String  @default("#55BDBE") // acento do quadro (paleta SHU)
+  isArchived  Boolean @default(false)
+
+  tasks  Task[]
+  labels Label[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------
+// TAREFAS
+// ------------------------------------------------------------
+
+model Task {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+
+  status   TaskStatus @default(BACKLOG)
+  priority Priority   @default(MEDIA)
+
+  /// Ordem DENTRO da coluna (indexação fracionária).
+  /// Ao soltar entre duas tarefas, recebe a média das posições vizinhas,
+  /// evitando reordenar a coluna inteira a cada arraste.
+  position Float @default(1000)
+
+  /// Datas que alimentam as visões Diária/Semanal/Mensal.
+  startDate   DateTime? // quando a tarefa deve começar
+  dueDate     DateTime? // prazo — base do lembrete T-2h e dos calendários
+  completedAt DateTime? // preenchido ao entrar em CONCLUIDO
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  labels        TaskLabel[]
+  activities    TaskActivity[]
+  comments      Comment[]
+  notifications NotificationLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Índices para as consultas mais quentes:
+  @@index([projectId, status, position]) // render do board
+  @@index([dueDate]) // calendários semanal/mensal e varredura de prazos
+  @@index([status])
+}
+
+/// Etiquetas (tags) por projeto. A cor é o "destaque suave" do design.
+model Label {
+  id        String      @id @default(cuid())
+  name      String
+  color     String      @default("#574E9C")
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     TaskLabel[]
+  createdAt DateTime    @default(now())
+
+  @@unique([projectId, name])
+}
+
+/// Tabela de junção explícita Task <-> Label.
+model TaskLabel {
+  taskId  String
+  labelId String
+  task    Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+}
+
+/// Histórico/auditoria de cada tarefa. Registra TODA transição de status,
+/// o que serve para: timeline, métricas de tempo por coluna e
+/// para acionar os gatilhos de notificação (gargalo/sucesso).
+model TaskActivity {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  /// Transição de status, quando aplicável.
+  fromStatus TaskStatus?
+  toStatus   TaskStatus?
+
+  /// Tipo livre do evento (ex.: "MOVED", "CREATED", "DUE_CHANGED").
+  action String
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+model Comment {
+  id     String @id @default(cuid())
+  body   String
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId, createdAt])
+}
+
+// ------------------------------------------------------------
+// NOTIFICAÇÕES (WhatsApp — Meta Cloud API)
+// ------------------------------------------------------------
+
+/// Registro de cada notificação. Serve de auditoria E de trava anti-duplicação:
+/// antes de enviar, o worker checa se já existe log ENVIADA equivalente
+/// (mesmo tipo + tarefa + janela), evitando reenvio em restart da fila.
+model NotificationLog {
+  id      String              @id @default(cuid())
+  type    NotificationType
+  channel NotificationChannel @default(WHATSAPP)
+  status  NotificationStatus  @default(AGENDADA)
+
+  /// Destinatário do disparo (o gestor).
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Tarefa relacionada (nulo no resumo matinal, que é agregado).
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  /// ID do job no BullMQ (determinístico p/ lembrete: "deadline:<taskId>"),
+  /// permite cancelar/reagendar.
+  jobId String?
+
+  /// Nome do Message Template aprovado na Meta usado neste disparo.
+  templateName String?
+
+  /// Conteúdo enviado (params do template) e metadados de retorno da API.
+  payload  Json?
+  toNumber String?
+  /// ID da mensagem retornado pela Cloud API (wamid), p/ rastrear status.
+  wamid    String?
+  error    String?
+
+  scheduledFor DateTime? // quando deveria disparar (resumo/lembrete)
+  sentAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, type, createdAt])
+  @@index([taskId])
+  @@index([status, scheduledFor])
+}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           

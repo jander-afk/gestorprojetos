@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Design tokens ===== */
+/* Modelo clean: muito espaço em branco, neutros frios e acentos suaves.
+   Acentos = paleta oficial SHU (turquesa / azul / laranja). */
+
+:root {
+  --background: #f7f8f9; /* branco-gelo */
+  --foreground: #1f2937; /* cinza-escuro p/ texto */
+  --card: #ffffff;
+  --card-foreground: #1f2937;
+  --muted: #eef1f3;
+  --muted-foreground: #6b7280;
+  --border: #e5e8eb;
+  --input: #e5e8eb;
+  --ring: #55bdbe;
+
+  --primary: #55bdbe; /* turquesa */
+  --primary-foreground: #08312f;
+  --secondary: #574e9c; /* azul */
+  --accent: #e7632f; /* laranja */
+}
+
+.dark {
+  --background: #0d1117;
+  --foreground: #e6edf3;
+  --card: #161b22;
+  --card-foreground: #e6edf3;
+  --muted: #1c232c;
+  --muted-foreground: #9aa4b2;
+  --border: #283039;
+  --input: #283039;
+  --ring: #55bdbe;
+
+  --primary: #55bdbe;
+  --primary-foreground: #06231f;
+  --secondary: #8b81d6;
+  --accent: #f1773f;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  /* respeita o notch e a barra inferior no iOS/Android */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Esconde scrollbar horizontal do board mantendo o scroll por toque */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

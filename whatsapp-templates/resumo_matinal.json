@@ -1,0 +1,14 @@
+{
+  "name": "resumo_matinal",
+  "language": "pt_BR",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "BODY",
+      "text": "☀️ Bom dia! Hoje você tem {{1}} tarefa(s) no Foco de Hoje: {{2}}",
+      "example": {
+        "body_text": [["3", "Aprovar arte do tapume, Confirmar influenciadoras, Revisar release"]]
+      }
+    }
+  ]
+}
