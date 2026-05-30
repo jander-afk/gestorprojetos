@@ -1,33 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
+  // Erro vem como ?error=... quando o NextAuth redireciona de volta.
+  useEffect(() => {
+    setHasError(new URLSearchParams(window.location.search).has("error"));
+  }, []);
+
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-    setLoading(false);
-    if (res?.error) {
-      setError("E-mail ou senha inválidos.");
-      return;
-    }
-    router.push("/hoje");
-    router.refresh();
+    // redirect: true -> o NextAuth conduz o fluxo completo (sem corrida de CSRF).
+    // Sucesso -> /hoje ; falha -> /login?error=CredentialsSignin
+    signIn("credentials", { email, password, callbackUrl: "/hoje" });
   }
 
   return (
@@ -43,9 +36,7 @@ export default function LoginPage() {
           className="space-y-4 rounded-xl border border-border bg-card p-6"
         >
           <div className="space-y-1.5">
-            <label htmlFor="email" className="text-sm font-medium">
-              E-mail
-            </label>
+            <label htmlFor="email" className="text-sm font-medium">E-mail</label>
             <input
               id="email"
               type="email"
@@ -58,9 +49,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="password" className="text-sm font-medium">
-              Senha
-            </label>
+            <label htmlFor="password" className="text-sm font-medium">Senha</label>
             <input
               id="password"
               type="password"
@@ -72,7 +61,9 @@ export default function LoginPage() {
             />
           </div>
 
-          {error && <p className="text-sm text-accent">{error}</p>}
+          {hasError && (
+            <p className="text-sm text-accent">E-mail ou senha inválidos.</p>
+          )}
 
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Entrando…" : "Entrar"}
