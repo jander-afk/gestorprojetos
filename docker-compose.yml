@@ -51,6 +51,17 @@ services:
         condition: service_healthy
     command: npm run worker
 
+  mcp:
+    build: ./mcp-server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_URL: http://web:3000
+    depends_on:
+      - web
+    expose:
+      - "8080"
+
   nginx:
     image: nginx:1.27
     restart: unless-stopped
