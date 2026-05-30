@@ -37,6 +37,12 @@ services:
         condition: service_healthy
     # roda as migrações e sobe o Next
     command: sh -c "npx prisma migrate deploy && npm run start"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
     expose:
       - "3000"
 
@@ -75,6 +81,33 @@ services:
       # certificados Let's Encrypt (gerados com certbot no host):
       - /etc/letsencrypt:/etc/letsencrypt:ro
 
+  backup:
+    image: prodrigestivill/postgres-backup-local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-kanban}
+      POSTGRES_USER: ${POSTGRES_USER:-kanban}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senha_forte}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: "7"
+      BACKUP_KEEP_WEEKS: "4"
+      BACKUP_KEEP_MONTHS: "6"
+    volumes:
+      - pgbackups:/backups
+
+  autoheal:
+    image: willfarrell/autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
 volumes:
   pgdata:
+  pgbackups:
   redisdata:

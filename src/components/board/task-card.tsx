@@ -42,6 +42,9 @@ export function TaskCard({
   const style = { transform: CSS.Translate.toString(transform), transition };
   const doneCount = task.checklist?.filter((c) => c.done).length ?? 0;
   const totalCount = task.checklist?.length ?? 0;
+  const dueMs = task.dueDate ? new Date(task.dueDate).getTime() : null;
+  const overdue = dueMs != null && dueMs < Date.now() && task.status !== TaskStatus.CONCLUIDO;
+  const dueSoon = dueMs != null && !overdue && dueMs < Date.now() + 48 * 3600 * 1000;
 
   return (
     <div
@@ -90,9 +93,17 @@ export function TaskCard({
               title={`Prioridade: ${task.priority}`}
             />
             {task.dueDate && (
-              <span className="inline-flex items-center gap-1">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1",
+                  overdue && "font-semibold text-red-600",
+                  dueSoon && "text-accent",
+                )}
+                title={overdue ? "Atrasada" : dueSoon ? "Vence em breve" : undefined}
+              >
                 <Clock className="h-3.5 w-3.5" />
                 {formatDue(task.dueDate)}
+                {overdue && " ⚠"}
               </span>
             )}
             {totalCount > 0 && (

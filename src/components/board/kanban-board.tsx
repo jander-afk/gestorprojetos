@@ -16,11 +16,13 @@ import {
   type UniqueIdentifier,
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { TaskStatus } from "@prisma/client";
+import { TaskStatus, Priority } from "@prisma/client";
 import { COLUMN_ORDER, COLUMN_LABEL } from "@/lib/kanban";
 import { COLUMN_DOT } from "./column-style";
 import { KanbanColumn } from "./kanban-column";
 import { TaskCard } from "./task-card";
+import { Search, X } from "lucide-react";
+import { useLabels } from "@/hooks/use-task-detail";
 import { TaskDialog } from "@/components/tasks/task-dialog";
 import { useIsDesktop } from "@/hooks/use-media-query";
 import { useMoveTask, useCreateTask } from "@/hooks/use-tasks";
@@ -53,6 +55,11 @@ export function KanbanBoard({
     TaskStatus.FOCO_HOJE,
   );
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const { data: labels } = useLabels(projectId);
+  const [q, setQ] = useState("");
+  const [catId, setCatId] = useState("");
+  const [prio, setPrio] = useState("");
+  const [dueF, setDueF] = useState<"all" | "overdue" | "week">("all");
 
   useEffect(() => {
     if (!activeId) setItems(group(tasks));
@@ -169,8 +176,77 @@ export function KanbanBoard({
     setEditingTaskId(t.id); // abre o modal para enriquecer a tarefa recém-criada
   }
 
+  function matchesFilters(t: TaskDTO): boolean {
+    if (q && !t.title.toLowerCase().includes(q.toLowerCase())) return false;
+    if (catId && !t.labels.some((l) => l.label.id === catId)) return false;
+    if (prio && t.priority !== prio) return false;
+    if (dueF !== "all") {
+      if (!t.dueDate) return false;
+      const d = new Date(t.dueDate).getTime();
+      const now = Date.now();
+      if (dueF === "overdue" && !(d < now && t.status !== TaskStatus.CONCLUIDO)) return false;
+      if (dueF === "week" && d > now + 7 * 86400000) return false;
+    }
+    return true;
+  }
+  const filtersActive = !!(q || catId || prio || dueF !== "all");
+  const view: Grouped = filtersActive
+    ? (Object.fromEntries(
+        COLUMN_ORDER.map((s2) => [s2, items[s2].filter(matchesFilters)]),
+      ) as unknown as Grouped)
+    : items;
+
   return (
     <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar tarefa…"
+            className="h-9 w-44 rounded-lg border border-input bg-background pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <select
+          value={catId}
+          onChange={(e) => setCatId(e.target.value)}
+          className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="">Categoria</option>
+          {labels?.map((l) => (
+            <option key={l.id} value={l.id}>{l.name}</option>
+          ))}
+        </select>
+        <select
+          value={prio}
+          onChange={(e) => setPrio(e.target.value)}
+          className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="">Prioridade</option>
+          <option value={Priority.URGENTE}>Urgente</option>
+          <option value={Priority.ALTA}>Alta</option>
+          <option value={Priority.MEDIA}>Média</option>
+          <option value={Priority.BAIXA}>Baixa</option>
+        </select>
+        <select
+          value={dueF}
+          onChange={(e) => setDueF(e.target.value as "all" | "overdue" | "week")}
+          className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-muted-foreground outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="all">Prazo</option>
+          <option value="overdue">Atrasadas</option>
+          <option value="week">Próx. 7 dias</option>
+        </select>
+        {filtersActive && (
+          <button
+            onClick={() => { setQ(""); setCatId(""); setPrio(""); setDueF("all"); }}
+            className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" /> Limpar
+          </button>
+        )}
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -184,7 +260,7 @@ export function KanbanBoard({
               <div key={status} className="flex w-72 shrink-0 flex-col">
                 <KanbanColumn
                   status={status}
-                  tasks={items[status]}
+                  tasks={view[status]}
                   onChangeStatus={changeStatus}
                   onCreate={createTask}
                   onOpen={setEditingTaskId}
@@ -213,7 +289,7 @@ export function KanbanBoard({
                       style={{ backgroundColor: COLUMN_DOT[status] }}
                     />
                     {COLUMN_LABEL[status]}
-                    <span className="opacity-60">{items[status].length}</span>
+                    <span className="opacity-60">{view[status].length}</span>
                   </button>
                 );
               })}
@@ -221,7 +297,7 @@ export function KanbanBoard({
             <div className="min-h-0 flex-1">
               <KanbanColumn
                 status={mobileStatus}
-                tasks={items[mobileStatus]}
+                tasks={view[mobileStatus]}
                 onChangeStatus={changeStatus}
                 onCreate={createTask}
                 onOpen={setEditingTaskId}

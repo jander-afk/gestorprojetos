@@ -55,6 +55,18 @@ export async function POST(req: NextRequest) {
       : await prisma.project.findFirst({ orderBy: { createdAt: "asc" } });
     if (!project) throw new HttpError(400, "Nenhum projeto encontrado");
 
+    // Idempotência: se uma tarefa idêntica (mesmo título) foi criada nos
+    // últimos 20s, devolve ela em vez de duplicar (protege contra retry).
+    const recent = await prisma.task.findFirst({
+      where: {
+        projectId: project.id,
+        title: b.titulo,
+        createdAt: { gte: new Date(Date.now() - 20_000) },
+      },
+      include: { labels: { include: { label: true } }, checklist: true },
+    });
+    if (recent) return NextResponse.json(mapTask(recent), { status: 200 });
+
     const status = statusFromInput(b.status) ?? TaskStatus.BACKLOG;
     const priority = priorityFromInput(b.prioridade) ?? Priority.MEDIA;
 
