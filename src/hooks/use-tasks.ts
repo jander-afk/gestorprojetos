@@ -47,6 +47,8 @@ export function useCreateTask(projectId: string) {
       apiSend<TaskDTO>("/api/tasks", "POST", { ...input, projectId }),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: boardKey(projectId) });
+      qc.invalidateQueries({ queryKey: ["focus-today"] });
+      qc.invalidateQueries({ queryKey: ["range"] });
     },
   });
 }

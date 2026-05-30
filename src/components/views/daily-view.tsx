@@ -4,6 +4,8 @@ import { Sun, Clock } from "lucide-react";
 import { useFocusToday, useTasksRange } from "@/hooks/use-views";
 import { dayBounds, fmt } from "@/lib/view-dates";
 import { TaskItem } from "./task-item";
+import { NewTaskButton } from "@/components/tasks/new-task-button";
+import { TaskStatus } from "@prisma/client";
 
 export function DailyView() {
   const today = new Date();
@@ -14,9 +16,16 @@ export function DailyView() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <p className="text-sm capitalize text-muted-foreground">
-        {fmt(today, "EEEE, d 'de' MMMM")}
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm capitalize text-muted-foreground">
+          {fmt(today, "EEEE, d 'de' MMMM")}
+        </p>
+        <NewTaskButton
+          status={TaskStatus.FOCO_HOJE}
+          label="Nova atividade para hoje"
+          alwaysLabel
+        />
+      </div>
 
       <section>
         <div className="mb-3 flex items-center gap-2">

@@ -7,6 +7,7 @@ import { Settings, LogOut } from "lucide-react";
 import { NAV } from "./nav";
 import { ThemeToggle } from "./theme-toggle";
 import { BottomNav } from "./bottom-nav";
+import { NewTaskButton } from "@/components/tasks/new-task-button";
 import { cn } from "@/lib/cn";
 
 const TITLES: Record<string, string> = {
@@ -63,7 +64,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur">
           <h1 className="font-heading text-base font-semibold">{title}</h1>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <NewTaskButton />
             <ThemeToggle />
             <Link
               href="/config"
