@@ -1,11 +1,13 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-// Servidor MCP do Kanban SHU. Expõe 3 ferramentas que chamam a API externa
-// do app (/api/ext/*) usando a chave de API. Transporte: Streamable HTTP
-// (stateless). Acesso protegido por um segredo no caminho da URL.
+// Servidor MCP do Kanban SHU (Streamable HTTP COM sessão). Expõe 3 ferramentas
+// que chamam a API externa do app (/api/ext/*) com a chave de API. Acesso
+// protegido por um segredo no caminho da URL.
 
 const APP_URL = process.env.APP_URL || "http://web:3000";
 const API_TOKEN = process.env.API_TOKEN || "";
@@ -29,8 +31,8 @@ function buildServer() {
 
   server.tool(
     "listar_atividades",
-    "Lista as atividades do quadro Kanban. Opcionalmente filtra por status: 'Foco de Hoje', 'A fazer', 'Em andamento', 'Pendente', 'Aprovado', 'Em produção', 'Concluído'.",
-    { status: z.string().optional().describe("Status para filtrar (rótulo em português)") },
+    "Lista as atividades do quadro Kanban. Filtra por status opcional: 'Foco de Hoje', 'A fazer', 'Em andamento', 'Pendente', 'Aprovado', 'Em produção', 'Concluído'.",
+    { status: z.string().optional().describe("Status (rótulo em português)") },
     async ({ status }) => {
       const data = await api(`/api/ext/tasks${status ? `?status=${encodeURIComponent(status)}` : ""}`);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
@@ -45,8 +47,8 @@ function buildServer() {
       status: z.string().optional().describe("Coluna inicial (padrão: A fazer)"),
       prioridade: z.string().optional().describe("Baixa, Média, Alta ou Urgente"),
       descricao: z.string().optional(),
-      inicio: z.string().optional().describe("Data/hora de início em ISO 8601"),
-      prazo: z.string().optional().describe("Data/hora de prazo em ISO 8601"),
+      inicio: z.string().optional().describe("Início em ISO 8601"),
+      prazo: z.string().optional().describe("Prazo em ISO 8601"),
       categoria: z.string().optional().describe("Categoria/etiqueta"),
       checklist: z.array(z.string()).optional().describe("Itens do checklist"),
     },
@@ -67,7 +69,7 @@ function buildServer() {
       descricao: z.string().optional(),
       inicio: z.string().optional(),
       prazo: z.string().optional(),
-      checklist: z.array(z.string()).optional().describe("Itens a adicionar ao checklist"),
+      checklist: z.array(z.string()).optional().describe("Itens a adicionar"),
     },
     async ({ id, ...patch }) => {
       const data = await api(`/api/ext/tasks/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
@@ -81,25 +83,49 @@ function buildServer() {
 const app = express();
 app.use(express.json());
 
-async function handleMcp(req, res) {
+const transports = {};
+
+function checkSecret(req, res) {
   if (SECRET && req.params.secret !== SECRET) {
     res.status(403).json({ error: "forbidden" });
-    return;
+    return false;
   }
-  const server = buildServer();
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  res.on("close", () => { transport.close(); server.close(); });
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
+  return true;
 }
 
-app.post("/mcp/:secret", (req, res) => {
-  handleMcp(req, res).catch((e) => {
+app.post("/mcp/:secret", async (req, res) => {
+  try {
+    if (!checkSecret(req, res)) return;
+    const sid = req.headers["mcp-session-id"];
+    let transport;
+    if (sid && transports[sid]) {
+      transport = transports[sid];
+    } else if (!sid && isInitializeRequest(req.body)) {
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (id) => { transports[id] = transport; },
+      });
+      transport.onclose = () => { if (transport.sessionId) delete transports[transport.sessionId]; };
+      await buildServer().connect(transport);
+    } else {
+      res.status(400).json({ jsonrpc: "2.0", error: { code: -32000, message: "Sessão inválida" }, id: null });
+      return;
+    }
+    await transport.handleRequest(req, res, req.body);
+  } catch (e) {
     console.error(e);
     if (!res.headersSent) res.status(500).json({ error: String(e) });
-  });
+  }
 });
-app.get("/mcp/:secret", (_req, res) => res.status(405).json({ error: "use POST" }));
+
+async function sessionRequest(req, res) {
+  if (!checkSecret(req, res)) return;
+  const sid = req.headers["mcp-session-id"];
+  if (!sid || !transports[sid]) { res.status(400).send("Sessão inválida"); return; }
+  await transports[sid].handleRequest(req, res);
+}
+app.get("/mcp/:secret", sessionRequest);
+app.delete("/mcp/:secret", sessionRequest);
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => console.log(`Kanban MCP server on :${PORT}`));
+app.listen(PORT, () => console.log(`Kanban MCP server (sessão) on :${PORT}`));
