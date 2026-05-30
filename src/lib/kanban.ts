@@ -1,4 +1,4 @@
-import { TaskStatus } from "@prisma/client";
+import { TaskStatus, Priority } from "@prisma/client";
 
 // Ordem fixa das 7 colunas do Kanban e seus rótulos em português.
 export const COLUMN_ORDER: TaskStatus[] = [
@@ -52,4 +52,36 @@ export function computePosition(
 
 export function isTaskStatus(value: string): value is TaskStatus {
   return (COLUMN_ORDER as string[]).includes(value);
+}
+
+
+const norm = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+const STATUS_ALIASES: Record<string, TaskStatus> = (() => {
+  const m: Record<string, TaskStatus> = {};
+  for (const s of COLUMN_ORDER) {
+    m[norm(s)] = s; // nome do enum (FOCO_HOJE...)
+    m[norm(COLUMN_LABEL[s])] = s; // rótulo (Foco de Hoje...)
+  }
+  m["afazer"] = TaskStatus.BACKLOG;
+  m["backlog"] = TaskStatus.BACKLOG;
+  m["em producao"] = TaskStatus.EM_PRODUCAO;
+  return m;
+})();
+
+export function statusFromInput(input?: string | null): TaskStatus | undefined {
+  if (!input) return undefined;
+  return STATUS_ALIASES[norm(input)];
+}
+
+const PRIORITY_ALIASES: Record<string, Priority> = {
+  baixa: Priority.BAIXA,
+  media: Priority.MEDIA,
+  alta: Priority.ALTA,
+  urgente: Priority.URGENTE,
+};
+export function priorityFromInput(input?: string | null): Priority | undefined {
+  if (!input) return undefined;
+  return PRIORITY_ALIASES[norm(input)];
 }

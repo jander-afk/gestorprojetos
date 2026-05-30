@@ -40,6 +40,15 @@ export function getTasksByDueRange(startUtc: Date, endUtc: Date) {
   });
 }
 
+/** Lista todas as tarefas, opcionalmente filtrando por status (uso externo/MCP). */
+export function listTasks(status?: TaskStatus | null) {
+  return prisma.task.findMany({
+    where: status ? { status } : {},
+    orderBy: [{ status: "asc" }, { position: "asc" }],
+    include: taskInclude,
+  });
+}
+
 /** Coluna "Foco de Hoje" (visão Diária). */
 export function getFocusToday() {
   return prisma.task.findMany({
